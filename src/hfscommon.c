@@ -159,8 +159,10 @@ int read_hfs_volume_header (FILE * f)
 	//hexdump(buffer+112+80*2, 80, 0);
 	catalog_start_block = readu32(buffer+112+80*2+16);
 	catalog_block_count = readu32(buffer+112+80*2+20);
-	printf("  startBlock = %08x (%u)\n", catalog_start_block, catalog_start_block);
-	printf("  blockCount = %08x (%u)\n", catalog_block_count, catalog_block_count);
+	printf("  startBlock = %08x (%u)", catalog_start_block, catalog_start_block);
+	printf("\toffset 0x%08x\n", catalog_start_block * block_size);
+	printf("  blockCount = %08x (%u)", catalog_block_count, catalog_block_count);
+	printf("\tsize = %u bytes\n", catalog_block_count * block_size);
 	return 1;
 }
 
