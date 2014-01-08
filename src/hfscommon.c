@@ -331,6 +331,9 @@ int hfs_find_in_node(unsigned char * catalog, unsigned char * p,
 			uint32_t folder_id;
 			uint32_t cur_parent_id = readu32(p + 2);
 			uint16_t HFSflags;
+			char fileTypeCreator[9];
+			int i;
+			uint32_t block;
 			hfs_uni_to_str(str, sizeof(str), p + 6);
 			q = p + 2 + key_length;
 			record_type = readu16(q);
@@ -372,6 +375,51 @@ int hfs_find_in_node(unsigned char * catalog, unsigned char * p,
 				p = q + 88;
 				break;
 			case 2: /* file record */
+				//file_id = readu32(q + 8);
+				HFSflags = readu16(q+56);
+				//UInt32              createDate;
+				//UInt32              contentModDate;
+				//UInt32              attributeModDate;
+				//UInt32              accessDate;
+				//UInt32              backupDate;
+				//HFSPlusBSDInfo      permissions;
+				//FileInfo            userInfo; // offset 48
+				//ExtendedFileInfo    finderInfo;
+				//UInt32              textEncoding;
+				//UInt32              reserved2;
+				//HFSPlusForkData     dataFork;  80 bytes
+				//HFSPlusForkData     resourceFork; 80 bytes
+				for(i=0; i<8; i++) {
+					if(q[48+i] > ' ')
+						fileTypeCreator[i] = q[48+i];
+					else
+						fileTypeCreator[i] = ' ';
+				}
+				fileTypeCreator[8] = '\0';
+				printf("    fileinfo \"%s\" (%d,%d) %04X", fileTypeCreator, reads16(q+58), reads16(q+60), HFSflags);
+				if(HFSflags & 0x0400) printf(" Custom Icon");
+				if(HFSflags & 0x4000) printf(" Invisible");
+				putchar('\n');
+				printf("    dataFork size=%u blocks=%u extents:", readu32(q+88+4), readu32(q+88+12));
+				for(i = 0; i < 8; i++) {
+					block = readu32(q+88+16+i*8);
+					printf(" (0x%06x, %u)", block, readu32(q+88+16+i*8+4));
+					if(block == 0) break;
+				}
+				putchar('\n');
+				printf("    resourceFork size=%u blocks=%u extents:", readu32(q+168+4), readu32(q+168+12));
+				for(i = 0; i < 8; i++) {
+					block = readu32(q+168+16+i*8);
+					printf(" (0x%06x, %u)", block, readu32(q+168+16+i*8+4));
+					if(block == 0) break;
+				}
+				putchar('\n');
+				if(cur_parent_id == parent_id &&
+				   (name == NULL || 0 == strcmp(name, str))) {
+					printf("FOUND FILE\n");
+					infos->p = q;
+					return 1;
+				}
 				p = q + 248;
 				break;
 			case 3:	/* folder thread record */
