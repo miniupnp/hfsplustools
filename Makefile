@@ -1,4 +1,8 @@
+# Thomas Bernard
 CFLAGS=-Wall -Werror
+# debug
+CFLAGS+=-g
+# cross compiler for win32
 MINGW32CC=i586-mingw32msvc-gcc
 
 SRCS=hfscommon.c hfspatchnoautofolder.c hfsunhide.c \
@@ -6,6 +10,7 @@ SRCS=hfscommon.c hfspatchnoautofolder.c hfsunhide.c \
 OBJS=$(addsuffix .o, $(basename $(SRCS)))
 WIN32OBJS=$(addsuffix .w32.o, $(basename $(SRCS)))
 BINS=hfsdisplay hfspatchnoautofolder hfsunhide hfsrename
+# comment the next line if you don't need to build the win32 executables
 EXES=$(addsuffix .exe, $(BINS))
 all:	$(addprefix bin/, $(BINS) $(EXES))
 
