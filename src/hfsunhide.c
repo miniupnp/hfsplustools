@@ -18,7 +18,7 @@ int main(int argc, char * * argv)
 {
 	FILE * f;
 	const char * isofile = NULL;
-	const char * appname = NULL;
+	const char * path = NULL;
 	int i;
 	int doit = 0;
 	int verbose = 0;
@@ -35,18 +35,18 @@ int main(int argc, char * * argv)
 			doit = 1;
 		else if(isofile == NULL)
 			isofile = argv[i];
-		else if(appname == NULL)
-			appname = argv[i];
+		else if(path == NULL)
+			path = argv[i];
 		else {
 			fprintf(stderr, "unrecognized argument : %s\n", argv[i]);
 			return 1;
 		}
 	}
-	if(isofile == NULL || appname == NULL) {
-		fprintf(stderr, "Usage: %s [--doit] [-v] <image.iso> FLIPBOOK.app\n", argv[0]);
+	if(isofile == NULL || path == NULL) {
+		fprintf(stderr, "Usage: %s [--doit] [-v] <image.iso> path/.../file.txt\n", argv[0]);
 		return 1;
 	}
-	printf("isofile=%s appname=%s\n", isofile, appname);
+	printf("isofile=%s path=%s\n", isofile, path);
 	f = fopen(isofile, "rb");
 	if(f == NULL) {
 		fprintf(stderr, "cannot open %s for reading\n", isofile);
@@ -58,6 +58,10 @@ int main(int argc, char * * argv)
 		fclose(f);
 		return 3;
 	} else {
+		const char * curpath;
+		char pathelt[256];
+		uint32_t folder_id;
+
 		read_hfs_volume_header(f);
 		//read_catalog(f);
 		catalog = load_catalog(f);
@@ -65,21 +69,43 @@ int main(int argc, char * * argv)
 			free(catalog);
 			return 4;
 		}
-		/* find fichier/appname.app */
-		if(hfs_find(catalog, 2 /* root id */, "fichiers", &infos)) {
-			printf("Folder /fichiers found : id=%u\n", infos.folder_id);
-			if(hfs_find(catalog, infos.folder_id, appname, &infos)) {
-				printf("Folder /fichier/%s found ! flags=%04X\n",
-				       appname, readu16(infos.p + 56));
+		/* find path/.../file.txt */
+		curpath = path;
+		folder_id = 2; /* root id */
+		do {
+			char * p;
+			size_t len;
+			p = strchr(curpath, '/');
+			if(p) {
+				len = p - curpath;
+				if(len >= sizeof(pathelt))
+					len = sizeof(pathelt) - 1;
+				memcpy(pathelt, curpath, len);
+				pathelt[len] = '\0';
+				curpath = p + 1;
+			} else {
+				strncpy(pathelt, curpath, sizeof(pathelt));
+				curpath = NULL;
+			}
+			if(!hfs_find(catalog, folder_id, pathelt, &infos)) {
+				/* not found */
+				break;
+			}
+			if(curpath) {
+				folder_id = infos.folder_id;
+				printf("Folder %s found : id=%u\n", pathelt, folder_id);
+			} else {
+				printf("Folder/file %s found ! flags=%04X\n",
+				       path, readu16(infos.p + 56));
 				found = 1;
 				if(readu16(infos.p + 56) & 0x4000)
 					need_patching = 1;
 			}
-		}
+		} while(curpath && !found);
 	}
 	fclose(f);
 	if(!found) {
-		fprintf(stderr, "Folder /fichiers/%s NOT FOUND !\n", appname);
+		fprintf(stderr, "Folder/file %s NOT FOUND !\n", path);
 		ret = 42;
 	} else if(!need_patching) {
 		fprintf(stderr, "%s doesn't need patching\n", isofile);
@@ -88,7 +114,7 @@ int main(int argc, char * * argv)
 	//   kIsInvisible    = 0x4000,     /* Files and folders */
 	if(doit && found && need_patching) {
 		uint16_t HFSflags, newHFSflags;
-		printf("unhidding fichiers/%s\n", appname);
+		printf("unhidding %s\n", path);
 		HFSflags = readu16(infos.p + 56);
 		newHFSflags = HFSflags & ~0x4000;
 		printf("flags %04X => %04X (offset %Xh in catalog)\n",
