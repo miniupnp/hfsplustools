@@ -22,6 +22,7 @@ extern uint32_t catalog_node_size;
 extern uint32_t catalog_root_node;
 
 uint16_t readu16(const unsigned char * p);
+int16_t reads16(const unsigned char * p);
 
 uint32_t readu32(const unsigned char * p);
 
