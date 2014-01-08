@@ -242,15 +242,23 @@ int print_node(const unsigned char * p)
 		printf("maxKeyLength=%u\n", readu16(q + 20));
 		printf("totalNodes=%u (%u bytes)\n",
 		       totalNodes, totalNodes * catalog_node_size);
-		if(catalog_block_count * block_size != totalNodes * catalog_node_size) {
-			fprintf(stderr, "ERROR catalog size inconsistency !\n");
-			return 0;
-		}
 		printf("freeNodes=%u\n", readu32(q + 26));
 		printf("clumpSize=%u\n", readu32(q + 32));
 		printf("btreeType=%u\n", q[36]);
 		printf("keyCompareType=%u\n", q[37]);
 		printf("attributes %08X\n", readu32(q + 38));
+		if(catalog_block_count * block_size != totalNodes * catalog_node_size) {
+			fprintf(stderr, "ERROR catalog size inconsistency ! (at offset %d=0x%0x in catalog)\n", (int)(q + 22 - p), (int)(q + 22 - p));
+			return 0;
+		}
+		q = q + 106;
+		/* 2nd : User Data Record. 128 bytes */
+		printf("User Data Record : \n");
+		hexdump(q, 128, 0);
+		q = q + 128;
+		/* 3rd : B-tree Map Record. nodeSize - 256 bytes */
+		printf("B-tree Map Record (first 128 bytes...) :\n");
+		hexdump(q, 128 /*catalog_node_size - 256*/, 0);
 	} else if(kind == 0) {	/* index node */
 		for(rec = 0; rec < num_records; rec++) {
 			/* record */
