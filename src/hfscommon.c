@@ -173,7 +173,11 @@ static void print_hfs_uni(const unsigned char * p)
 	p += 2;
 	putchar('"');
 	while(len > 0) {
-		putchar(p[1]);
+		if(p[0] || p[1] < 32) {
+			printf("\\u%02x%02x", p[0], p[1]);
+		} else {
+			putchar(p[1]);
+		}
 		p += 2;
 		len--;
 	}
@@ -183,14 +187,18 @@ static void print_hfs_uni(const unsigned char * p)
 static int hfs_uni_to_str(char * d, int n, const unsigned char * p)
 {
 	uint16_t len;
-	int i;
+	int i, j;
 	len = readu16(p);
 	p += 2;
-	for(i = 0; i < len && i < (n - 1); i++) {
-		d[i] = p[1];
+	for(i = 0, j = 0; i < len && j < (n - 1); i++) {
+		if(p[0] || p[1] < 32) {
+			j += snprintf(d + j, 7, "\\u%02x%02x", p[0], p[1]);
+		} else {
+			d[j++] = p[1];
+		}
 		p += 2;
 	}
-	d[i] = '\0';
+	d[j++] = '\0';
 	return i;
 }
 
