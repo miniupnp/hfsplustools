@@ -197,6 +197,7 @@ int parse_node(const unsigned char * p)
 {
 }
 */
+/* https://developer.apple.com/legacy/library/technotes/tn/tn1150.html#BTrees */
 /* should be replaced by parse */
 int print_node(const unsigned char * p)
 {
@@ -219,6 +220,7 @@ int print_node(const unsigned char * p)
 	q = p + 14;
 	if(kind == 1) { /* header node */
 		unsigned totalNodes;
+		/* 1st : B-Tree Header Record */
 		catalog_root_node = readu32(q + 2);
 		printf("rootNode = %u\n", catalog_root_node);
 		printf("leafRecords = %u\n", readu32(q + 6));
@@ -259,6 +261,7 @@ int print_node(const unsigned char * p)
 	return 1;
 }
 
+/* https://developer.apple.com/legacy/library/technotes/tn/tn1150.html#BTrees */
 static
 int hfs_find_in_node(unsigned char * catalog, unsigned char * p,
                      uint32_t parent_id, const char * name,
@@ -462,12 +465,14 @@ int read_catalog(FILE * f)
 	catalog = load_catalog(f);
 	if(catalog == NULL)
 		return 0;
+	printf("Catalog Header Node :\n");
 	if(!print_node(catalog)) {	/* header node */
 		free(catalog);
 		return 0;
 	}
+	printf("Catalog Root Node :\n");
+	print_node(catalog + catalog_root_node * catalog_node_size);/* root node */
 #if 0
-	//print_node(catalog + catalog_root_node * catalog_node_size);/* root node */
 	hfs_find(catalog, 1 /* root parent id */, NULL, &infos);
 	printf("----\n");
 	if(hfs_find(catalog, 2 /* root id */, "fichiers", &infos)) {
