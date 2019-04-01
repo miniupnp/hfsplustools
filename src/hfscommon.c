@@ -560,8 +560,37 @@ void read_partition_map(FILE * f)
 	unsigned char buffer[SECTOR_SIZE];
 	unsigned int i = 0;
 	unsigned int count = 0;
+	uint16_t block_size = 0;
+	uint32_t number_of_blocks = 0;
 
+#if 0
 	fseek(f, PARTITION_MAP_OFFSET, SEEK_SET);
+#else
+	/* read the Driver Descriptor */
+	fseek(f, 0, SEEK_SET);
+	fread(buffer, 1, sizeof(buffer), f);
+	hexdump(buffer, 32, 0);
+	if(readu16(buffer) != 0x4552) {	// signature
+		printf("bad signature for Driver Descriptor block\n");
+	} else {
+		unsigned int i, desc_count;
+		printf("=== Driver Descriptor Block ===\n");
+		block_size = readu16(buffer + 2);
+		number_of_blocks = readu32(buffer + 4);
+		printf("%lu blocks of %hu bytes. %lu bytes total.\n",
+		       (unsigned long)number_of_blocks, block_size, (unsigned long)number_of_blocks * block_size);
+		printf("Type %04hx Identifier %04hx Data %08x\n",
+		       readu16(buffer+8), readu16(buffer+10), readu32(buffer+12));
+		desc_count = readu16(buffer+16);
+		printf("%u descriptors%s\n", desc_count, (desc_count == 0) ? "." : " :");
+		for (i = 0; i < desc_count; i++) {
+			printf(" #%02u : start block %u, block count %u, OS=%04x\n",
+			       i, readu32(buffer+18+i*8), readu16(buffer+20+i*8),
+			       readu32(buffer+22+i*8));
+		}
+	}
+#endif
+
 	do {
 		unsigned int start, size;
 		unsigned int start_l, size_l;
@@ -591,5 +620,3 @@ void read_partition_map(FILE * f)
 		i++;
 	} while(i < count);
 }
-
-
