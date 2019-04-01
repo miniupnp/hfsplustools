@@ -290,22 +290,23 @@ int print_node(const unsigned char * p)
 			uint16_t key_length = readu16(q);
 			uint16_t record_type;
 			uint32_t parent_id = readu32(q + 2);
-			printf("  %hu parentId=%u ", rec, parent_id);
+			printf("  %2hu ", rec);
 			print_hfs_uni(q + 6);
 			q += key_length + 2;
 			record_type = readu16(q);
 			switch(record_type) {
 			case 1: /* folder record */
-				printf(" folder\n");
+				printf(" folder parentId=%u\n", parent_id);
 				q += 88;
 				break;
 			case 2: /* file record */
-				printf(" file\n");
+				printf(" file parentId=%u\n", parent_id);
 				q += 248;
 				break;
 			case 3:	/* folder thread record */
 			case 4: /* file thread record */
 				printf(" %s thread ", record_type == 3 ? "folder" : "file");
+				printf("%sId=%u ", record_type == 3 ? "folder" : "file", parent_id);
 				q += 4;
 				parent_id = readu32(q);
 				q += 4;
