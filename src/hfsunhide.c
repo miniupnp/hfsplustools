@@ -11,6 +11,13 @@ void writeu16(unsigned char * p, uint16_t i)
 }
 
 /* return :
+	0 OK
+	1 command line arguments error
+	2 cannot open iso file
+	3 no HFS/HFS+ partition found in iso file
+	4 HFS+ header node not found
+	5 cannot open iso file for writing
+	6 saving failed
 	42 Not found
 	43 dont need patching
 */ 

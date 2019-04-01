@@ -13,6 +13,8 @@ uint32_t catalog_start_block;
 uint32_t catalog_block_count;
 uint32_t catalog_node_size;
 uint32_t catalog_root_node;
+uint32_t catalog_first_leaf_node;
+uint32_t catalog_last_leaf_node;
 
 void hexdump(const unsigned char * p, unsigned int n, unsigned int a)
 {
@@ -202,6 +204,14 @@ static int hfs_uni_to_str(char * d, int n, const unsigned char * p)
 	return i;
 }
 
+static uint32_t next_node(unsigned char * catalog, uint32_t node)
+{
+	const unsigned char * p;
+	if(node == 0)
+		return 0;
+	p = catalog + node * catalog_node_size;
+	return readu32(p);
+}
 /*
 int parse_node(const unsigned char * p)
 {
@@ -232,10 +242,12 @@ int print_node(const unsigned char * p)
 		unsigned totalNodes;
 		/* 1st : B-Tree Header Record */
 		catalog_root_node = readu32(q + 2);
+		catalog_first_leaf_node = readu32(q + 10);
+		catalog_last_leaf_node = readu32(q + 14);
 		printf("rootNode = %u\n", catalog_root_node);
 		printf("leafRecords = %u\n", readu32(q + 6));
-		printf("firstLeafNode = %u\n", readu32(q + 10));
-		printf("lastLeafNode = %u\n", readu32(q + 14));
+		printf("firstLeafNode = %u\n", catalog_first_leaf_node);
+		printf("lastLeafNode = %u\n", catalog_last_leaf_node);
 		catalog_node_size = readu16(q + 18);
 		totalNodes = readu32(q + 22);
 		printf("nodeSize=%u\n", catalog_node_size);
@@ -273,6 +285,40 @@ int print_node(const unsigned char * p)
 			printf("=> %u\n", node_number);
 			q += key_length + 2 + 4;
 		}
+	} else if(kind == 255) {	/* leaf node */
+		for(rec = 0; rec < num_records; rec++) {
+			uint16_t key_length = readu16(q);
+			uint16_t record_type;
+			uint32_t parent_id = readu32(q + 2);
+			printf("  %hu parentId=%u ", rec, parent_id);
+			print_hfs_uni(q + 6);
+			q += key_length + 2;
+			record_type = readu16(q);
+			switch(record_type) {
+			case 1: /* folder record */
+				printf(" folder\n");
+				q += 88;
+				break;
+			case 2: /* file record */
+				printf(" file\n");
+				q += 248;
+				break;
+			case 3:	/* folder thread record */
+			case 4: /* file thread record */
+				printf(" %s thread ", record_type == 3 ? "folder" : "file");
+				q += 4;
+				parent_id = readu32(q);
+				q += 4;
+				printf("parentId=%u ", parent_id);
+				print_hfs_uni(q);
+				q += 2 * (1 + readu16(q));
+				printf("\n");
+				break;
+			default:
+				printf("\nrecord type %u not recognized\n", record_type);
+				return 0;
+			}
+		}
 	} else {
 		printf("unprocessed kind %u\n", kind);
 	}
@@ -286,10 +332,33 @@ int hfs_find_in_node(unsigned char * catalog, unsigned char * p,
                      struct find_infos * infos)
 {
 	uint8_t kind;
+#if 0
+	uint32_t fLink, bLink;
+	int height;
+#endif
 	uint16_t rec, num_records;
 	uint32_t previous_node_number = 0;
+	/* struct BTNodeDescriptor {
+	 *  UInt32    fLink;	// next node
+	 *  UInt32    bLink;	// previous node
+	 *  SInt8     kind;
+	 *  UInt8     height;
+	 *  UInt16    numRecords;
+	 *  UInt16    reserved;
+	 * };
+	 */
+#if 0
+	fLink = readu32(p);
+	bLink = readu32(p+4);
+	height = p[9];
+#endif
 	kind = p[8];
 	num_records = readu16(p+10);
+#if 0
+	printf("Node %lu next=%u previous=%u kind=%d height=%d numRecords=%hu\n",
+	       (unsigned long)(p - catalog) / catalog_node_size, fLink, bLink,
+	       (int)kind, (int)height, num_records);
+#endif
 	p += 14;
 	switch(kind) {
 	case 0:	/* index */
@@ -300,12 +369,23 @@ int hfs_find_in_node(unsigned char * catalog, unsigned char * p,
 			uint32_t cur_parent_id = readu32(p + 2);
 			uint32_t node_number = readu32(p + key_length + 2);
 			hfs_uni_to_str(str, sizeof(str), p + 6);
+			/* Catalog file keys are compared first by parentID and
+			 * then by nodeName. The parentID is compared as an
+			 * unsigned 32-bit integer.
+			 * For case-sensitive HFSX volumes, the characters in nodeName
+			 * are compared as a sequence of unsigned 16-bit integers.
+			 * For case-insensitive HFSX volumes and HFS Plus volumes,
+			 * the nodeName must be compared in a case-insensitive way,
+			 * as described in the Case-Insensitive String Comparison
+			 * Algorithm section. */
 			if(parent_id == cur_parent_id) {
-				if((name == NULL) || (0==strcasecmp(str, name))) {
+				int comp = strcasecmp(str, name);
+				/* https://developer.apple.com/library/archive/technotes/tn/tn1150.html#StringComparisonAlgorithm */
+				if((name == NULL) || (0==comp)) {
 					/* this one */
 					p = catalog + node_number * catalog_node_size;
 					return hfs_find_in_node(catalog, p, parent_id, name, infos);
-				} else if(strcasecmp(str, name) > 0) {
+				} else if(comp > 0) {
 					/* previous one ! */
 					p = catalog + previous_node_number * catalog_node_size;
 					return hfs_find_in_node(catalog, p, parent_id, name, infos);
@@ -318,8 +398,8 @@ int hfs_find_in_node(unsigned char * catalog, unsigned char * p,
 			p += key_length + 2 + 4;
 			previous_node_number = node_number;
 		}
-		printf("OUT\n");
-		break;
+		p = catalog + previous_node_number * catalog_node_size;
+		return hfs_find_in_node(catalog, p, parent_id, name, infos);
 	case 255:	/* LEAF */
 		printf("LEAF %u records\n", num_records);
 		for(rec = 0; rec < num_records; rec++) {
@@ -330,6 +410,9 @@ int hfs_find_in_node(unsigned char * catalog, unsigned char * p,
 			uint32_t valence;
 			uint32_t folder_id;
 			uint32_t cur_parent_id = readu32(p + 2);
+			/* For file and folder records, this is the folder containing
+			 * the file or folder represented by the record. For thread
+			 * records, this is the CNID of the file or folder itself. */
 			uint16_t HFSflags;
 			char fileTypeCreator[9];
 			int i;
@@ -366,7 +449,7 @@ int hfs_find_in_node(unsigned char * catalog, unsigned char * p,
 				if(HFSflags & 0x4000) printf(" Invisible");
 				putchar('\n');
 				if(cur_parent_id == parent_id &&
-				   (name == NULL || 0 == strcmp(name, str))) {
+				   (name == NULL || 0 == strcasecmp(name, str))) {
 					printf("FOUND FOLDER\n");
 					infos->folder_id = folder_id;
 					infos->p = q;
@@ -415,7 +498,7 @@ int hfs_find_in_node(unsigned char * catalog, unsigned char * p,
 				}
 				putchar('\n');
 				if(cur_parent_id == parent_id &&
-				   (name == NULL || 0 == strcmp(name, str))) {
+				   (name == NULL || 0 == strcasecmp(name, str))) {
 					printf("FOUND FILE\n");
 					infos->p = q;
 					return 1;
@@ -526,6 +609,7 @@ int save_catalog(FILE * f, unsigned char * catalog)
 int read_catalog(FILE * f)
 {
 	unsigned char * catalog;
+	uint32_t node;
 	//struct find_infos infos;
 
 	catalog = load_catalog(f);
@@ -549,6 +633,10 @@ int read_catalog(FILE * f)
 		}
 	}
 #endif
+	printf("Catalog Leaf Nodes :\n");
+	for(node = catalog_first_leaf_node; node != 0; node = next_node(catalog, node)) {
+		print_node(catalog + node * catalog_node_size);
+	}
 	free(catalog);
 	return 1;
 }
