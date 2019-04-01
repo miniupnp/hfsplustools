@@ -1,0 +1,14 @@
+language: c
+
+addons:
+  apt:
+    packages:
+    - gcc-mingw-w64-i686
+
+sudo: false
+
+script:
+  - 'cd $TRAVIS_BUILD_DIR'
+  - 'make'
+  - 'make dist'
+  - 'make distbin'

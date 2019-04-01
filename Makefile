@@ -1,9 +1,10 @@
 # Thomas Bernard
-CFLAGS=-Wall -Werror
+CFLAGS = -Wall -Werror
 # debug
-CFLAGS+=-g
+CFLAGS += -g
 # cross compiler for win32
-MINGW32CC=i586-mingw32msvc-gcc
+MINGW32CC ?= $(shell which mingw32-gcc || which i586-mingw32msvc-gcc \
+               || which i686-w64-mingw32-gcc)
 
 SRCS=hfscommon.c hfspatchnoautofolder.c hfsunhide.c \
      hfsdisplay.c hfsrename.c
